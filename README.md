@@ -1,4 +1,4 @@
-git# eva_timer
+# eva_timer
 
 A new Flutter project.
 
