@@ -1,84 +1,156 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'dart:async';
 
-void main() {
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => Counter()),
-      ],
-      child: const MyApp(),
-    ),
-  );
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+/// Event being processed by [CounterBloc].
+enum CounterEvent {
+  /// Notifies bloc to increment state.
+  increment,
+
+  /// Notifies bloc to decrement state.
+  decrement,
+
+  /// Notifies the bloc of an error
+  error,
 }
 
-class Counter with ChangeNotifier {
-  int _count = 0;
+/// Custom [BlocObserver] which observes all bloc and cubit instances.
 
-  int get count => _count;
+void main() {
+  runApp(App());
+}
 
-  void increment() async {
-    while (1 == 1) {
-      _count = DateTime.now().millisecond;
-      await Future.delayed(const Duration(milliseconds: 300));
-      print(_count);
-      notifyListeners();
+/// A [StatelessWidget] which uses:
+/// * [bloc](https://pub.dev/packages/bloc)
+/// * [flutter_bloc](https://pub.dev/packages/flutter_bloc)
+/// to manage the state of a counter.
+class App extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => ThemeCubit(),
+      child: BlocBuilder<ThemeCubit, ThemeData>(
+        builder: (_, theme) {
+          return MaterialApp(
+            theme: theme,
+            home: BlocProvider(
+              create: (_) => CounterBloc(),
+              child: CounterPage(),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// A [StatelessWidget] which demonstrates
+/// how to consume and interact with a [CounterBloc].
+class CounterPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Counter')),
+      body: BlocBuilder<CounterBloc, int>(
+        builder: (_, count) {
+          return Center(
+            child: Text('$count', style: Theme.of(context).textTheme.headline1),
+          );
+        },
+      ),
+      floatingActionButton: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5.0),
+            child: FloatingActionButton(
+              child: const Icon(Icons.add),
+              onPressed: () =>
+                  context.read<CounterBloc>().add(CounterEvent.increment),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5.0),
+            child: FloatingActionButton(
+              child: const Icon(Icons.remove),
+              onPressed: () =>
+                  context.read<CounterBloc>().add(CounterEvent.decrement),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5.0),
+            child: FloatingActionButton(
+              child: const Icon(Icons.brightness_6),
+              onPressed: () => context.read<ThemeCubit>().toggleTheme(),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5.0),
+            child: FloatingActionButton(
+              backgroundColor: Colors.red,
+              child: const Icon(Icons.error),
+              onPressed: () =>
+                  context.read<CounterBloc>().add(CounterEvent.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// {@template counter_bloc}
+/// A simple [Bloc] which manages an `int` as its state.
+/// {@endtemplate}
+class CounterBloc extends Bloc<CounterEvent, int> {
+  /// {@macro counter_bloc}
+  CounterBloc() : super(0);
+
+  @override
+  Stream<int> mapEventToState(CounterEvent event) async* {
+    switch (event) {
+      case CounterEvent.decrement:
+        yield state - 1;
+        break;
+      case CounterEvent.increment:
+        yield state + 1;
+        break;
+      case CounterEvent.error:
+        addError(Exception('unsupported event'));
     }
   }
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+/// {@template brightness_cubit}
+/// A simple [Cubit] which manages the [ThemeData] as its state.
+/// {@endtemplate}
+class ThemeCubit extends Cubit<ThemeData> {
+  /// {@macro brightness_cubit}
+  ThemeCubit() : super(_lightTheme);
 
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: MyHomePage(),
-    );
-  }
-}
+  static final _lightTheme = ThemeData(
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      foregroundColor: Colors.white,
+    ),
+    brightness: Brightness.light,
+  );
 
-class MyHomePage extends StatelessWidget {
-  const MyHomePage({Key? key}) : super(key: key);
+  static final _darkTheme = ThemeData(
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      foregroundColor: Colors.black,
+    ),
+    brightness: Brightness.dark,
+  );
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Example'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const <Widget>[
-            Text('You have pushed the button this many times:'),
-            Count(),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        key: const Key('increment_floatingActionButton'),
-        onPressed: () async {
-          context.read<Counter>().increment();
-          await Future.delayed(const Duration(milliseconds: 8));
-        },
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-}
-
-class Count extends StatelessWidget {
-  const Count({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-        '${context.watch<Counter>().count}',
-        key: const Key('counterState'),
-        style: Theme.of(context).textTheme.headline4);
+  /// Toggles the current brightness between light and dark.
+  void toggleTheme() {
+    if (state.brightness == Brightness.dark) {
+      emit(_lightTheme);
+    } else {
+      emit(_darkTheme);
+    }
   }
 }
